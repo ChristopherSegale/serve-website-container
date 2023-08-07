@@ -1,0 +1,28 @@
+MAINTAINER Christopher Segale <ccs.segale@gmail.com>
+LABEL version="1.0"
+LABEL description="personal website container"
+FROM archlinux:latest AS build-env
+RUN pacman -Syu --disable-download-timeout --noconfirm && pacman -S --disable-download-timeout --noconfirm sbcl make git
+WORKDIR /app
+COPY . /app
+ADD https://beta.quicklisp.org/quicklisp.lisp /root/quicklisp.lisp
+RUN set -x; \
+	sbcl --load /root/quicklisp.lisp \
+	     --eval "(quicklisp-quickstart:install)" \
+	     --eval "(ql:quickload '(:hunchentoot :cl-who :bordeaux-threads))" \
+	     --quit && \
+	echo '#-quicklisp (load #P"/root/quicklisp/setup.lisp")' > /root/.sbclrc && \
+	rm /root/quicklisp.lisp && \
+	git clone https://github.com/ChristopherSegale/serve-website && \
+	git clone https://github.com/ChristopherSegale/personal-website && \
+	rm serve-website/contents.wpt && \
+	cp personal-website/contents.wpt serve-website && \
+	cp -r personal-website/web-resources/* serve-website/web-resources && \
+	cd serve-website && make
+FROM archlinux:latest
+RUN pacman -Syu --disable-download-timeout --noconfirm && pacman -Sc --noconfirm
+WORKDIR /app
+COPY --from=build-env /app /app
+EXPOSE 8080
+WORKDIR /app/serve-website
+ENTRYPOINT /app/serve-website/serve-website
